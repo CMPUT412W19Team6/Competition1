@@ -17,12 +17,13 @@ from smach import State, StateMachine
 import angles as angles_lib
 import smach_ros
 import math
+import random
 
 # used global to set turn direction to avoid passing it between states
 turn_direction = 1
 
 HARD_TURN_DISTANCE = 0.7
-TURN_DISTANCE = 1.5
+TURN_DISTANCE = 1.1
 FORWARD_CURRENT = 0
 TURN_CURRENT = 0
 STATE_CHANGE_TIME = None
@@ -43,6 +44,18 @@ def check_forward_distance(forward_vec, start_pos, current_pos):
     return dist
 
 
+START = False
+
+
+def joy_callback(msg):
+    global START
+
+    if msg.buttons[0] == 1:  # button A
+        START = True
+    elif msg.buttons[1] == 1:  # button B
+        START = False
+
+
 class WaitForButton(State):
     """
     Wait for button press, pass start pose (translation and rotation)
@@ -54,17 +67,19 @@ class WaitForButton(State):
                        output_keys=["start_pose_out"])
         # TODO: change it back to False
         self.START = True
-        self.pose = None
+        # TODO: change this too
+        self.pose = [0, 0, 0, 0]
 
         # pub / sub
-        rospy.Subscriber("joy", Joy, callback=self.joy_callback)
+        # rospy.Subscriber("joy", Joy, callback=self.joy_callback)
         rospy.Subscriber("odom", Odometry, callback=self.odom_callback)
 
     def execute(self, userdata):
-        while not self.START and not rospy.is_shutdown():
+        global START
+        while not START and not rospy.is_shutdown():
             continue
         userdata.start_pose_out = self.pose
-        self.START = False
+        # START = False
         return "success"
 
     def joy_callback(self, msg):
@@ -150,7 +165,7 @@ class WaitForButton(State):
 
 class Translate(State):
     def __init__(self, distance=0.15, linear=-0.2):
-        State.__init__(self, outcomes=["success", "collision"])
+        State.__init__(self, outcomes=["success", "collision", "quit"])
         self.tb_position = None
         self.tb_rot = None
         self.distance = distance
@@ -176,6 +191,9 @@ class Translate(State):
 
     def execute(self, userdata):
         global turn_direction
+        global START
+        if not START:
+            return 'quit'
         self.COLLISION = False
         start_heading = self.tb_rot[2]
         start_pos = self.tb_position
@@ -204,7 +222,7 @@ class Translate(State):
 
 class Rotate(State):
     def __init__(self, angle=90):
-        State.__init__(self, outcomes=["success"],
+        State.__init__(self, outcomes=["success", "quit"],
                        input_keys=['start_pose_in'])
         self.tb_position = None
         self.tb_rot = None
@@ -224,6 +242,9 @@ class Rotate(State):
 
     def execute(self, userdata):
         global turn_direction
+        global START
+        if not START:
+            return 'quit'
         start_pose = userdata.start_pose_in
         if self.angle == 0:  # target is goal + 0
             goal = start_pose[1]
@@ -264,8 +285,8 @@ class Rotate(State):
 
 
 class Evade(State):
-    def __init__(self, distance=3.38, v_forward=0.8, v_turn=0, turn=False, state='Evade'):
-        State.__init__(self, outcomes=["end", "collision", "turn", "hard_turn", "evade"],
+    def __init__(self, distance=3.38, v_forward=0.5, v_turn=0, turn=False, state='Evade'):
+        State.__init__(self, outcomes=["end", "collision", "turn", "hard_turn", "evade", "quit"],
                        input_keys=['start_pose_in'])
         self.COLLISION = False
         self.distance = distance
@@ -291,8 +312,12 @@ class Evade(State):
         global TURN_DISTANCE
         global HARD_TURN_DISTANCE
         global STATE_CHANGE_TIME
+        global START
 
         while not rospy.is_shutdown():
+
+            if not START:
+                return 'quit'
             # if collision, resolve collision
             if self.COLLISION:
                 msg = Twist()
@@ -300,6 +325,13 @@ class Evade(State):
                 self.cmd_pub.publish(msg)
                 self.COLLISION = False
                 return "collision"
+
+            # else, go straight
+            # random_turn_direction = random.randint(0, 1)
+            # if random_turn_direction == 0:
+            #     random_turn_direction = -1
+            move(self.forward_target,
+                 self.turn_target, self.cmd_pub)
 
             # if find wall/object in middle range, start turn
             if self.g_range_ahead < HARD_TURN_DISTANCE:
@@ -309,18 +341,16 @@ class Evade(State):
 
             # if find wall/object in super close rage or, start turn
             #  if timer runs out and we've been going straight, turn
-            # elif self.g_range_ahead < TURN_DISTANCE or (not self.turn and rospy.Time.now() > STATE_CHANGE_TIME):
-            elif self.g_range_ahead < TURN_DISTANCE:
+            elif self.g_range_ahead < TURN_DISTANCE or (not self.turn and rospy.Time.now() > STATE_CHANGE_TIME):
+                # elif self.g_range_ahead < TURN_DISTANCE:
                 STATE_CHANGE_TIME = rospy.Time.now() + rospy.Duration(3)
                 if self.state != 'Turn':
                     return self.start_turn()
 
-            # else, go straight
-            move(self.forward_target, self.turn_target, self.cmd_pub)
+            elif self.state != 'Evade':
+                return 'evade'
 
             self.rate.sleep()
-            if self.state != 'Evade':
-                return 'evade'
 
     def start_turn(self):
         return 'turn'
@@ -333,10 +363,17 @@ class Evade(State):
             self.COLLISION = True
 
     def odom_callback(self, msg):
-        pass
+        tb_pose = msg.pose.pose
+        self.tb_pose = numpify(tb_pose)
+        __, __, angles, position, __ = decompose_matrix(numpify(tb_pose))
+        self.tb_position = position[0:2]
+        self.tb_rot = angles
 
     def scan_callback(self, msg):
-        self.g_range_ahead = min(msg.ranges)
+        validList = [x for x in msg.ranges if not math.isnan(x)]
+        validList.append(float('Inf'))
+        # g range ahead will be the minimal range
+        self.g_range_ahead = min(validList)
 
 
 def move(forward_target, turn_target, pub):
@@ -363,6 +400,8 @@ def ramped_vel(v_prev, v_target, ramp_rate):
     get the ramped velocity
     from rom https://github.com/MandyMeindersma/Robotics/blob/master/Competitions/Comp1/Evasion.py
     """
+    if abs(v_prev) > abs(v_target):
+        ramp_rate *= 2
     step = ramp_rate * 0.1
     sign = 1.0 if (v_target > v_prev) else -1.0
     error = math.fabs(v_target - v_prev)
@@ -374,7 +413,7 @@ def ramped_vel(v_prev, v_target, ramp_rate):
 
 if __name__ == "__main__":
     rospy.init_node("demo2")
-
+    rospy.Subscriber("joy", Joy, callback=joy_callback)
     STATE_CHANGE_TIME = rospy.Time.now()
 
     sm = StateMachine(outcomes=['success', 'failure'])
@@ -384,19 +423,19 @@ if __name__ == "__main__":
                          remapping={'start_pose_out': 'start_pose'})
         # StateMachine.add("Parallel", Goal(), transitions={'end': 'Wait', 'collision': 'Backup'},
         #                  remapping={'start_pose_in': 'start_pose'})
-        StateMachine.add("Evade", Evade(), transitions={'end': 'Wait', 'collision': 'Backup', 'evade': 'Evade', 'turn': 'Turn', 'hard_turn': 'HardTurn'},
+        StateMachine.add("Evade", Evade(), transitions={'end': 'Wait', 'collision': 'Backup', 'evade': 'Evade', 'turn': 'Turn', 'hard_turn': 'HardTurn', 'quit': 'Wait'},
                          remapping={'start_pose_out': 'start_pose'})
-        StateMachine.add("Turn", Evade(v_forward=0.2, v_turn=0.8, turn=True, state='Turn'), transitions={'end': 'Wait', 'collision': 'Backup', 'evade': 'Evade', 'turn': 'Turn', 'hard_turn': 'HardTurn'},
+        StateMachine.add("Turn", Evade(v_forward=0.2, v_turn=0.8, turn=True, state='Turn'), transitions={'quit': 'Wait', 'end': 'Wait', 'collision': 'Backup', 'evade': 'Evade', 'turn': 'Turn', 'hard_turn': 'HardTurn'},
                          remapping={'start_pose_out': 'start_pose'})
-        StateMachine.add("HardTurn", Evade(v_forward=0, v_turn=1, turn=True, state='HardTurn'), transitions={'end': 'Wait', 'collision': 'Backup', 'evade': 'Evade', 'turn': 'Turn', 'hard_turn': 'HardTurn'},
+        StateMachine.add("HardTurn", Evade(v_forward=0, v_turn=1, turn=True, state='HardTurn'), transitions={'quit': 'Wait', 'end': 'Wait', 'collision': 'Backup', 'evade': 'Evade', 'turn': 'Turn', 'hard_turn': 'HardTurn'},
                          remapping={'start_pose_out': 'start_pose'})
         StateMachine.add("Backup", Translate(distance=0.15, linear=-0.2),
-                         transitions={'success': 'TurnPerpendicular', 'collision': 'failure'})
-        StateMachine.add("TurnPerpendicular", Rotate(angle=90), transitions={'success': 'Perpendicular'},
+                         transitions={'success': 'TurnPerpendicular', 'collision': 'failure', 'quit': 'Wait'})
+        StateMachine.add("TurnPerpendicular", Rotate(angle=90), transitions={'success': 'Perpendicular', 'quit': 'Wait'},
                          remapping={'start_pose_in': 'start_pose'})
         StateMachine.add("Perpendicular", Translate(distance=0.40, linear=0.2), transitions={'success': 'TurnParallel',
-                                                                                             'collision': 'Backup'})
-        StateMachine.add("TurnParallel", Rotate(angle=0), transitions={'success': 'Evade'},
+                                                                                             'collision': 'Backup', 'quit': 'Wait'})
+        StateMachine.add("TurnParallel", Rotate(angle=0), transitions={'success': 'Evade', 'quit': 'Wait'},
                          remapping={'start_pose_in': 'start_pose'})
 
     sis = smach_ros.IntrospectionServer('server_name', sm, '/SM_ROOT')

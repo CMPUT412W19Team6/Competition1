@@ -1,7 +1,7 @@
 <launch>
-    <!-- <include file="$(find turtlebot_gazebo)/launch/turtlebot_world.launch" >
-        <arg name="world_file" value="~/Desktop/world.world"/>
-    </include> -->
+    <include file="$(find turtlebot_gazebo)/launch/turtlebot_world.launch" >
+        <arg name="world_file" value="$(find turtlebot_gazebo)/worlds/world.world"/>
+    </include>
 
     
 <!-- 
@@ -16,6 +16,12 @@
     <!-- <node pkg="turtlebot_teleop" type="turtlebot_teleop_key" name="turtlebot_teleop_key" >
         <remap from="/turtlebot_teleop/cmd_vel" to="cmd_vel_mux/input/teleop"/>
     </node> -->
+        
+    <!-- </include> -->
+
+    <node pkg="joy" type="joy_node" name="joy_node">
+        
+    </node>
 
     <node pkg="comp1" type="evader.py" name="evader" output="screen">
         
