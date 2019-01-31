@@ -23,7 +23,7 @@ class Idle(smach.State):
         is_node_active = True
         return "start"
 
-class Pursue(smach.State):
+class Pursuit(smach.State):
     def __init__(self):
         smach.State.__init__(
                                 self,
@@ -142,7 +142,7 @@ if __name__ == "__main__":
         # Add states to the container
         smach.StateMachine.add("IDLE", Idle(), 
                                transitions={"start":"PURSUIT"})
-        smach.StateMachine.add("Pursue", Pursue(), 
+        smach.StateMachine.add("PURSUIT", Pursuit(), 
                                transitions={"stop":"IDLE", "lost":"LOST"})
         smach.StateMachine.add("LOST", Lost(), 
                                transitions={"found":"PURSUIT", "failed":"IDLE"})
