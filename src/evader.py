@@ -413,7 +413,7 @@ def ramped_vel(v_prev, v_target, ramp_rate):
 
 if __name__ == "__main__":
     rospy.init_node("demo2")
-    rospy.Subscriber("joy", Joy, callback=joy_callback)
+    rospy.Subscriber("/joy", Joy, callback=joy_callback)
     STATE_CHANGE_TIME = rospy.Time.now()
 
     sm = StateMachine(outcomes=['success', 'failure'])

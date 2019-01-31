@@ -1,0 +1,23 @@
+<launch>
+    <arg name="ns1" value="turtlebot1"/>
+    <arg name="ns2" value="turtlebot2"/>
+
+    <include file="$(find comp1)/launch/multiple/multiple_turtlebot_world.launch">   
+        <arg name="world_file" value="$(find comp1)/simulation/world.sdf"/>
+        <arg name="x" value="-4"/>
+        <arg name="y" value="-5"/>
+        <arg name="z" value="0.1"/>
+    </include>
+    <!-- <node name="rviz" pkg="rviz" type="rviz" args="-d $(find comp1)/simulation/world.rviz"/> -->
+
+    <node pkg="comp1" name="evader" type="evader.py" ns="$(arg ns1)" output="screen">
+        <param name="robot_name" value="$(arg ns1)"/>
+    </node>
+
+    <node pkg="comp1" name="pursuer" type="pursuer.py" ns="$(arg ns2)" output="screen">
+        <param name="robot_name" value="$(arg ns2)"/>
+    </node>
+
+    <node pkg="joy" type="joy_node" name="joy_node"/>
+    <node pkg="smach_viewer" type="smach_viewer.py" name="smach" />
+</launch>

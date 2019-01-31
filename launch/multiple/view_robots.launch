@@ -1,0 +1,6 @@
+<!--
+  Used for visualising two turtlebots.
+ -->
+<launch>
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find multiple_turtlebots)/rviz/view_robots.rviz"/>
+</launch>
