@@ -3,13 +3,13 @@
 import rospy
 import smach
 import smach_ros
+import math
 from roslib import message
 from std_msgs.msg import String
 from sensor_msgs import point_cloud2
 from sensor_msgs.msg import PointCloud2
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
-from math import copysign
 
 class Idle(smach.State):
     def __init__(self):
@@ -23,19 +23,55 @@ class Idle(smach.State):
         is_node_active = True
         return "start"
 
-class Pursuit(smach.State):
+class Pursue(smach.State):
     def __init__(self):
         smach.State.__init__(
                                 self,
                                 outcomes=["stop", "lost"],
                             )
     def execute(self, userdata):
-        global is_node_active, cmd_vel_pub, move_cmd, rate
+        global is_node_active, linear_distance, angular_distance, cmd_vel_pub, goal_z, move_cmd, rate, min_linear_speed, max_linear_speed, min_angular_speed, max_angular_speed
 
         # Publish the movement command
+        ramped_rate = 0.3
+
         while is_node_active:
+            if linear_distance > 0.82:
+                move_cmd.linear.x = self.ramped_vel(move_cmd.linear.x, move_cmd.linear.x + 0.1, ramped_rate)
+            elif linear_distance < 0.78:
+                move_cmd.linear.x = self.ramped_vel(move_cmd.linear.x, move_cmd.linear.x - 0.1, ramped_rate)
+            else:
+                move_cmd.linear.x = self.ramped_vel(move_cmd.linear.x, 0, ramped_rate)
+
+            if angular_distance < 180: # evader to the left
+                move_cmd.angular.z = self.ramped_vel(move_cmd.angular.z, move_cmd.angular.z - 0.05, ramped_rate)
+            elif angular_distance > 260:
+                move_cmd.angular.z = self.ramped_vel(move_cmd.angular.z, move_cmd.angular.z + 0.05, ramped_rate)
+            else:
+                move_cmd.angular.z = self.ramped_vel(move_cmd.angular.z, 0, ramped_rate)
+            
+            move_cmd.linear.x = math.copysign(max(min_linear_speed, min(abs(move_cmd.linear.x), max_linear_speed)), move_cmd.linear.x)
+            move_cmd.angular.z = math.copysign(max(min_angular_speed, min(abs(move_cmd.angular.z), max_angular_speed)), move_cmd.angular.z)
+
+            move_cmd.linear.x = abs(move_cmd.linear.x)
+            
             cmd_vel_pub.publish(move_cmd)
             rate.sleep()
+
+    def ramped_vel(self, v_prev, v_target, ramp_rate):
+        """
+        get the ramped velocity
+        from rom https://github.com/MandyMeindersma/Robotics/blob/master/Competitions/Comp1/Evasion.py
+        """
+        if abs(v_prev) > abs(v_target):
+            ramp_rate *= 2
+        step = ramp_rate * 0.1
+        sign = 1.0 if (v_target > v_prev) else -1.0
+        error = math.fabs(v_target - v_prev)
+        if error < step:  # we can get there in this time so we are done
+            return v_target
+        else:
+            return v_prev + sign*step
 
 class Lost(smach.State):
     def __init__(self):
@@ -47,86 +83,57 @@ class Lost(smach.State):
         pass
 
 def set_cmd_vel(msg):
-    global debug_pub, min_y, max_y, max_x, min_x, max_z, goal_z, z_threshold, z_scale, move_cmd, min_linear_speed, max_linear_speed, min_angular_speed, max_angular_speed, slow_down_factor, x_threshold, x_scale
+    global linear_distance, angular_distance, debug_pub, goal_z, z_threshold, move_cmd, min_linear_speed, max_linear_speed, min_angular_speed, max_angular_speed, slow_down_factor, x_threshold
     # Initialize the centroid coordinates point count
-    x = y = z = n = 0
-    
-    # Read in the x, y, z coordinates of all points in the cloud
-    for point in point_cloud2.read_points(msg, skip_nans=True):
-        pt_x = point[0]
-        pt_y = point[1]
-        pt_z = point[2]
-        
-        if -pt_y > min_y and -pt_y < max_y and pt_x < max_x and pt_x > min_x and pt_z < max_z:
-            x += pt_x
-            y += pt_y
-            z += pt_z
-            n += 1
-    
-    # If we have points, compute the centroid coordinates
-    if n:
-        x /= n 
-        y /= n 
-        z /= n
-        
-        debug_pub.publish("X: " + str(x) + " Z: " + str(z))
-        
-        # Check our movement thresholds
-        if (abs(z - goal_z) > z_threshold):
-            # Compute the angular component of the movement
-            linear_speed = (z - goal_z) * z_scale
-            
-            # Make sure we meet our min/max specifications
-            move_cmd.linear.x = copysign(max(min_linear_speed, min(max_linear_speed, abs(linear_speed))), linear_speed)
-        else:
-            move_cmd.linear.x *= slow_down_factor
-            
-        if (abs(x) > x_threshold):     
-            # Compute the linear component of the movement
-            angular_speed = x * x_scale
-            
-            # Make sure we meet our min/max specifications
-            move_cmd.angular.z = copysign(max(min_angular_speed, min(max_angular_speed, abs(angular_speed))), angular_speed)
-        else:
-            # Stop the rotation smoothly
-            move_cmd.angular.z *= slow_down_factor
-            
-    else:
-        # Stop the robot smoothly
-        move_cmd.linear.x *= slow_down_factor
-        move_cmd.angular.z *= slow_down_factor
+
+    # triPoint = [i for i in range (0,121)]
+    # triPoint = []
+
+    # for i in range(0,181):
+    #     triPoint.append(msg.ranges[(len(msg.ranges)/2) - 90 + i])
+
+    object_detected = False
+    linear_distance = 100
+
+    for i in range(440):
+        index = i + 100
+        if (msg.ranges[index] < linear_distance and not math.isnan(msg.ranges[index]) and msg.ranges[index] > msg.range_min and msg.ranges[index] < msg.range_max):
+            linear_distance = msg.ranges[index]
+            angular_distance = i
+            object_detected = True
+
+    print angular_distance, msg.ranges[angular_distance + 100]
+
+    if not object_detected:
+        linear_distance = 0.80
+        angular_distance = 220
 
 if __name__ == "__main__":
     rospy.init_node("pursuer")
 
     is_node_active = False
-    rate = rospy.Rate(10)
+    rate = rospy.Rate(30)
 
-    min_x = rospy.get_param("~min_x", -0.2)
-    max_x = rospy.get_param("~max_x", 0.2)
-    min_y = rospy.get_param("~min_y", -0.5)
-    max_y = rospy.get_param("~max_y", 0.5)
-    max_z = rospy.get_param("~max_z", 2.0)
+    linear_distance = 0
+    angular_distance = 0
 
-    goal_z = rospy.get_param("~goal_z", 0.25) # The goal distance (in meters) to keep between the robot and the person
+    goal_z = rospy.get_param("~goal_z", 0.7) # The goal distance (in meters) to keep between the robot and the person
     z_threshold = rospy.get_param("~z_threshold", 0.05) # How far away from the goal distance (in meters) before the robot reacts
     x_threshold = rospy.get_param("~x_threshold", 0.05) # How far away from being centered (x displacement) on the person before the robot reacts
-    z_scale = rospy.get_param("~z_scale", 1.0) # How much do we weight the goal distance (z) when making a movement
-    x_scale = rospy.get_param("~x_scale", 4.5) # How much do we weight x-displacement of the person when making a movement  
-    max_angular_speed = rospy.get_param("~max_angular_speed", 2.0) # The maximum rotation speed in radians per second
+    max_angular_speed = rospy.get_param("~max_angular_speed", 0.8) # The maximum rotation speed in radians per second
     min_angular_speed = rospy.get_param("~min_angular_speed", 0.0) # The minimum rotation speed in radians per second
-    max_linear_speed = rospy.get_param("~max_linear_speed", 1.0) # The max linear speed in meters per second
+    max_linear_speed = rospy.get_param("~max_linear_speed", 0.6) # The max linear speed in meters per second
     min_linear_speed = rospy.get_param("~min_linear_speed", 0.0) # The minimum linear speed in meters per second
     slow_down_factor = rospy.get_param("~slow_down_factor", 0.0) # Slow down factor when stopping
 
     move_cmd = Twist() # Initialize the movement command
 
     cmd_vel_pub = rospy.Publisher('cmd_vel_mux/input/teleop', Twist, queue_size=5) # Publisher to control the robot's movement
-    depth_subscriber = rospy.Subscriber('camera/depth/points', PointCloud2, set_cmd_vel, queue_size=1) # Subscribe to the point cloud
+    depth_subscriber = rospy.Subscriber('scan', LaserScan, set_cmd_vel, queue_size=1) # Subscribe to the point cloud
     debug_pub = rospy.Publisher('/debug', String, queue_size=5) # Publisher to control the robot's movement
 
     rospy.loginfo("Subscribing to point cloud...") # Wait for the pointcloud topic to become available
-    rospy.wait_for_message('camera/depth/points', PointCloud2)
+    rospy.wait_for_message('scan', LaserScan)
     rospy.loginfo("Ready to follow!")
 
     sm = smach.StateMachine(outcomes=[]) # Create a SMACH state machine
@@ -135,7 +142,7 @@ if __name__ == "__main__":
         # Add states to the container
         smach.StateMachine.add("IDLE", Idle(), 
                                transitions={"start":"PURSUIT"})
-        smach.StateMachine.add("PURSUIT", Pursuit(), 
+        smach.StateMachine.add("Pursue", Pursue(), 
                                transitions={"stop":"IDLE", "lost":"LOST"})
         smach.StateMachine.add("LOST", Lost(), 
                                transitions={"found":"PURSUIT", "failed":"IDLE"})
