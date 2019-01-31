@@ -36,9 +36,9 @@ class Pursuit(smach.State):
         ramped_rate = 0.3
 
         while is_node_active:
-            if linear_distance > 0.82:
+            if linear_distance > 0.88:
                 move_cmd.linear.x = self.ramped_vel(move_cmd.linear.x, move_cmd.linear.x + 0.1, ramped_rate)
-            elif linear_distance < 0.78:
+            elif linear_distance < 0.84:
                 move_cmd.linear.x = self.ramped_vel(move_cmd.linear.x, move_cmd.linear.x - 0.1, ramped_rate)
             else:
                 move_cmd.linear.x = self.ramped_vel(move_cmd.linear.x, 0, ramped_rate)

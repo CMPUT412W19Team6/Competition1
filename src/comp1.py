@@ -429,9 +429,9 @@ class Pursue(State):
                 self.cmd_vel_pub.publish(Twist())
                 return "quit"
 
-            if self.linear_distance > 0.82:
+            if self.linear_distance > 0.88:
                 FORWARD_CURRENT = FORWARD_CURRENT + 0.1
-            elif self.linear_distance < 0.78:
+            elif self.linear_distance < 0.84:
                 FORWARD_CURRENT = FORWARD_CURRENT - 0.1
             else:
                 FORWARD_CURRENT = 0
