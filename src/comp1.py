@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 '''
-based on example from demo2 , from https://eclass.srv.ualberta.ca/pluginfile.php/4926642/mod_folder/content/0/demo2.py?forcedownload=1
-ideation based on 
+evader code based on example from demo2 , from https://eclass.srv.ualberta.ca/pluginfile.php/4926642/mod_folder/content/0/demo2.py?forcedownload=1
+pursuer code based on https://github.com/Hegberg/DaffyDuckDivision/blob/master/Competitions/Competition1/src/wanderSM.py 
 '''
 
 import rospy
@@ -46,7 +46,6 @@ def check_forward_distance(forward_vec, start_pos, current_pos):
 
 START_EVADE = False
 START_PURSUE = False
-
 
 def joy_callback(msg):
     global START_EVADE
@@ -102,78 +101,6 @@ class WaitForButton(State):
         tb_pose = msg.pose.pose
         __, __, angles, position, __ = decompose_matrix(numpify(tb_pose))
         self.pose = [position[0:2], angles[2]]
-
-
-# class Goal(State):
-#     """
-#     Keep track of goal heading and drive parallel to that direction
-#     """
-
-#     def __init__(self, distance=3.38):
-#         State.__init__(self, outcomes=["end", "collision"],
-#                        input_keys=['start_pose_in'])
-#         self.cmd_pub = rospy.Publisher(
-#             "cmd_vel_mux/input/teleop", Twist, queue_size=1)
-#         self.COLLISION = False
-#         self.distance = distance
-#         self.tb_position = None
-#         self.tb_rot = None
-
-#         # pub / sub
-#         rospy.Subscriber("odom", Odometry, callback=self.odom_callback)
-#         rospy.Subscriber("/mobile_base/events/bumper",
-#                          BumperEvent, callback=self.bumper_callback)
-#         self.sound_pub = rospy.Publisher(
-#             "/mobile_base/commands/sound", Sound, queue_size=1)
-
-#     def bumper_callback(self, msg):
-#         if msg.state:
-#             self.COLLISION = True
-
-#     def odom_callback(self, msg):
-#         tb_pose = msg.pose.pose
-#         self.tb_pose = numpify(tb_pose)
-#         __, __, angles, position, __ = decompose_matrix(numpify(tb_pose))
-#         self.tb_position = position[0:2]
-#         self.tb_rot = angles
-
-#     def execute(self, userdata):
-#         self.COLLISION = False
-#         start_heading = userdata.start_pose_in[1]
-#         start_pos = userdata.start_pose_in[0]
-
-#         forward_vec = calc_delta_vector(start_heading, self.distance)
-#         rate = rospy.Rate(10)
-
-#         while not rospy.is_shutdown():
-#             if self.COLLISION:
-#                 msg = Twist()
-#                 msg.linear.x = 0.0
-#                 self.cmd_pub.publish(msg)
-#                 self.COLLISION = False
-#                 return "collision"
-#             if check_forward_distance(forward_vec, start_pos, self.tb_position) > self.distance:
-#                 # stop robot and signal using sound
-#                 msg = Twist()
-#                 msg.linear.x = 0.0
-#                 self.cmd_pub.publish(msg)
-#                 msg = Sound()
-#                 msg.value = 4
-#                 self.sound_pub.publish(msg)
-#                 return "end"
-
-#             msg = Twist()
-#             msg.linear.x = 0.2
-#             turn_error = angles_lib.normalize_angle(
-#                 start_heading - self.tb_rot[2])
-#             msg.angular.z = 0
-
-#             # p controller for driving straight
-#             msg.angular.z = 1.0 * turn_error
-
-#             self.cmd_pub.publish(msg)
-#             rate.sleep()
-
 
 class Translate(State):
     def __init__(self, distance=0.15, linear=-0.2):
@@ -394,19 +321,25 @@ class Pursue(State):
                         outcomes=["end", "quit"],
                     )
 
-        self.linear_distance = 1.0
+        self.linear_distance = 0.86
         self.angular_distance = 0
-        self.ramped_rate = 0.3
+        self.ramped_rate = rospy.get_param("~pursuer_ramped_rate", 0.3) # Rate for ramped velocity change
 
         self.publish_rate = rospy.Rate(30)
-        self.goal_z = rospy.get_param("~goal_z", 0.7) # The goal distance (in meters) to keep between the robot and the person
-        self.z_threshold = rospy.get_param("~z_threshold", 0.05) # How far away from the goal distance (in meters) before the robot reacts
-        self.x_threshold = rospy.get_param("~x_threshold", 0.05) # How far away from being centered (x displacement) on the person before the robot reacts
-        self.max_angular_speed = rospy.get_param("~max_angular_speed", 0.8) # The maximum rotation speed in radians per second
-        self.min_angular_speed = rospy.get_param("~min_angular_speed", 0.0) # The minimum rotation speed in radians per second
-        self.max_linear_speed = rospy.get_param("~max_linear_speed", 0.6) # The max linear speed in meters per second
-        self.min_linear_speed = rospy.get_param("~min_linear_speed", 0.0) # The minimum linear speed in meters per second
-        self.slow_down_factor = rospy.get_param("~slow_down_factor", 0.0) # Slow down factor when stopping
+        self.goal_z = rospy.get_param("~pursuer_goal_z", 0.86) # The goal distance (in meters) to keep between the robot and the person
+        self.z_threshold = rospy.get_param("~pursuer_z_threshold", 0.02) # How far away from the goal distance (in meters) before the robot reacts
+        
+        x_threshold = rospy.get_param("~pursuer_x_threshold", 4) # How far away in degrees from being centered (x displacement) on the person before the robot reacts
+        self.slice_delta = int(math.ceil((640.0 / 59.767276634) * x_threshold)) # Calculate how far values in laserscan data array has to be from center of the array for the pursuer to react
+
+        field_of_view = rospy.get_param("~pursuer_field_of_view", 41) # How wide in degrees should the pursuer's vision be to look for evader (0 <= pursuer_field_of_view <= 58)
+        field_of_view = max(0, min(field_of_view, 58)) # normalizing FOV
+        self.slice_length = int(math.ceil((640.0 / 59.767276634) * field_of_view)) # Calculate how many values of laserscan data fall in pursuer's field of vision
+
+        self.max_angular_speed = rospy.get_param("~pursuer_max_angular_speed", 0.8) # The maximum rotation speed in radians per second
+        self.min_angular_speed = rospy.get_param("~pursuer_min_angular_speed", 0.0) # The minimum rotation speed in radians per second
+        self.max_linear_speed = rospy.get_param("~pursuer_max_linear_speed", 0.6) # The max linear speed in meters per second
+        self.min_linear_speed = rospy.get_param("~pursuer_min_linear_speed", 0.0) # The minimum linear speed in meters per second
 
         self.cmd_vel_pub = rospy.Publisher('cmd_vel_mux/input/teleop', Twist, queue_size=5) # Publisher to control the robot's movement
         self.depth_subscriber = rospy.Subscriber('scan', LaserScan, self.set_cmd_vel, queue_size=1) # Subscribe to the point cloud
@@ -429,16 +362,16 @@ class Pursue(State):
                 self.cmd_vel_pub.publish(Twist())
                 return "quit"
 
-            if self.linear_distance > 0.88:
-                FORWARD_CURRENT = FORWARD_CURRENT + 0.1
-            elif self.linear_distance < 0.84:
-                FORWARD_CURRENT = FORWARD_CURRENT - 0.1
+            if self.linear_distance > self.goal_z + self.z_threshold:
+                FORWARD_CURRENT = FORWARD_CURRENT + 0.1 # evader too far
+            elif self.linear_distance < self.goal_z - self.z_threshold:
+                FORWARD_CURRENT = FORWARD_CURRENT - 0.1 # evader too close
             else:
                 FORWARD_CURRENT = 0
 
-            if self.angular_distance < 180: # evader to the left
+            if self.angular_distance < (self.slice_length / 2) - self.slice_delta: # evader to the left
                 TURN_CURRENT = TURN_CURRENT - 0.05
-            elif self.angular_distance > 260:
+            elif self.angular_distance > (self.slice_length / 2) - self.slice_delta: # evader to the right
                 TURN_CURRENT = TURN_CURRENT + 0.05
             else:
                 TURN_CURRENT = 0
@@ -452,27 +385,19 @@ class Pursue(State):
             self.publish_rate.sleep()
 
     def set_cmd_vel(self, msg):
-        # Initialize the centroid coordinates point count
-
-        # triPoint = [i for i in range (0,121)]
-        # triPoint = []
-
-        # for i in range(0,181):
-        #     triPoint.append(msg.ranges[(len(msg.ranges)/2) - 90 + i])
-
         object_detected = False
-        self.linear_distance = 100
+        self.linear_distance = 100 # some large placeholder value
 
-        for i in range(440):
-            index = i + 100
-            if (msg.ranges[index] < self.linear_distance and not math.isnan(msg.ranges[index]) and msg.ranges[index] > msg.range_min and msg.ranges[index] < msg.range_max):
+        for i in range(self.slice_length): # consider only middle slice_length values of laserscan data
+            index = i + (640 - self.slice_length) / 2
+            if (msg.ranges[index] < self.linear_distance and not math.isnan(msg.ranges[index]) and msg.ranges[index] > msg.range_min and msg.ranges[index] < msg.range_max): # find the minimum distance to object in the field of view
                 self.linear_distance = msg.ranges[index]
                 self.angular_distance = i
                 object_detected = True
 
-        if not object_detected:
-            self.linear_distance = 0.80
-            self.angular_distance = 220
+        if not object_detected: # if nothing is in front, set distances to values that will make the robot not react
+            self.linear_distance = self.goal_z
+            self.angular_distance = self.slice_length / 2
 
 
 def move(forward_target, turn_target, pub, ramp_rate = 0.5):
@@ -514,6 +439,15 @@ if __name__ == "__main__":
     rospy.Subscriber("/joy", Joy, callback=joy_callback)
     STATE_CHANGE_TIME = rospy.Time.now()
 
+    start_mode = rospy.get_param("~start_mode", 'none')
+
+    if start_mode == 'pursuer':
+        START_EVADE = False
+        START_PURSUE = True
+    elif start_mode == 'evader':
+        START_EVADE = True
+        START_PURSUE = False
+
     sm = StateMachine(outcomes=['success', 'failure'])
     sm.userdata.start_pose = None
     with sm:
@@ -538,7 +472,7 @@ if __name__ == "__main__":
         StateMachine.add("Pursue", Pursue(), transitions={'end': 'Wait', 'quit': 'Wait'},
                          remapping={'start_pose_out': 'start_pose'})
 
-    sis = smach_ros.IntrospectionServer('server_name', sm, '/SM_ROOT')
+    sis = smach_ros.IntrospectionServer('comp1', sm, '/SM_ROOT')
     sis.start()
     outcome = sm.execute()
     sis.stop()

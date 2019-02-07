@@ -1,4 +1,9 @@
 #!/usr/bin/env python
+
+'''
+based on https://github.com/Hegberg/DaffyDuckDivision/blob/master/Competitions/Competition1/src/wanderSM.py
+'''
+
 # BEGIN ALL
 import rospy
 import smach
@@ -30,22 +35,21 @@ class Pursuit(smach.State):
                                 outcomes=["stop", "lost"],
                             )
     def execute(self, userdata):
-        global is_node_active, linear_distance, angular_distance, cmd_vel_pub, goal_z, move_cmd, rate, min_linear_speed, max_linear_speed, min_angular_speed, max_angular_speed
+        global is_node_active, linear_distance, angular_distance, slice_delta, slice_length, cmd_vel_pub, goal_z, z_threshold, move_cmd, rate, min_linear_speed, max_linear_speed, min_angular_speed, max_angular_speed, ramped_rate
 
         # Publish the movement command
-        ramped_rate = 0.3
-
+        
         while is_node_active:
-            if linear_distance > 0.88:
+            if linear_distance > goal_z + z_threshold: # evader too far
                 move_cmd.linear.x = self.ramped_vel(move_cmd.linear.x, move_cmd.linear.x + 0.1, ramped_rate)
-            elif linear_distance < 0.84:
+            elif linear_distance < goal_z - z_threshold: # evader too close
                 move_cmd.linear.x = self.ramped_vel(move_cmd.linear.x, move_cmd.linear.x - 0.1, ramped_rate)
             else:
                 move_cmd.linear.x = self.ramped_vel(move_cmd.linear.x, 0, ramped_rate)
 
-            if angular_distance < 180: # evader to the left
+            if angular_distance < (slice_length / 2) - slice_delta: # evader to the left
                 move_cmd.angular.z = self.ramped_vel(move_cmd.angular.z, move_cmd.angular.z - 0.05, ramped_rate)
-            elif angular_distance > 260:
+            elif angular_distance > (slice_length / 2) + slice_delta: # evader to the left
                 move_cmd.angular.z = self.ramped_vel(move_cmd.angular.z, move_cmd.angular.z + 0.05, ramped_rate)
             else:
                 move_cmd.angular.z = self.ramped_vel(move_cmd.angular.z, 0, ramped_rate)
@@ -83,30 +87,21 @@ class Lost(smach.State):
         pass
 
 def set_cmd_vel(msg):
-    global linear_distance, angular_distance, debug_pub, goal_z, z_threshold, move_cmd, min_linear_speed, max_linear_speed, min_angular_speed, max_angular_speed, slow_down_factor, x_threshold
-    # Initialize the centroid coordinates point count
-
-    # triPoint = [i for i in range (0,121)]
-    # triPoint = []
-
-    # for i in range(0,181):
-    #     triPoint.append(msg.ranges[(len(msg.ranges)/2) - 90 + i])
-
+    global linear_distance, angular_distance, goal_z, slice_length, debug_pub
+   
     object_detected = False
-    linear_distance = 100
+    linear_distance = 100 # some large placeholder value
 
-    for i in range(440):
-        index = i + 100
-        if (msg.ranges[index] < linear_distance and not math.isnan(msg.ranges[index]) and msg.ranges[index] > msg.range_min and msg.ranges[index] < msg.range_max):
+    for i in range(slice_length): # consider only middle slice_length values of laserscan data
+        index = i + (640 - slice_length) / 2
+        if (msg.ranges[index] < linear_distance and not math.isnan(msg.ranges[index]) and msg.ranges[index] > msg.range_min and msg.ranges[index] < msg.range_max): # find the minimum distance to object in the field of view
             linear_distance = msg.ranges[index]
             angular_distance = i
             object_detected = True
 
-    print angular_distance, msg.ranges[angular_distance + 100]
-
-    if not object_detected:
-        linear_distance = 0.80
-        angular_distance = 220
+    if not object_detected: # if nothing is in front, set distances to values that will make the robot not react
+        linear_distance = goal_z
+        angular_distance = slice_length / 2
 
 if __name__ == "__main__":
     rospy.init_node("pursuer")
@@ -117,14 +112,21 @@ if __name__ == "__main__":
     linear_distance = 0
     angular_distance = 0
 
-    goal_z = rospy.get_param("~goal_z", 0.7) # The goal distance (in meters) to keep between the robot and the person
-    z_threshold = rospy.get_param("~z_threshold", 0.05) # How far away from the goal distance (in meters) before the robot reacts
-    x_threshold = rospy.get_param("~x_threshold", 0.05) # How far away from being centered (x displacement) on the person before the robot reacts
-    max_angular_speed = rospy.get_param("~max_angular_speed", 0.8) # The maximum rotation speed in radians per second
-    min_angular_speed = rospy.get_param("~min_angular_speed", 0.0) # The minimum rotation speed in radians per second
-    max_linear_speed = rospy.get_param("~max_linear_speed", 0.6) # The max linear speed in meters per second
-    min_linear_speed = rospy.get_param("~min_linear_speed", 0.0) # The minimum linear speed in meters per second
-    slow_down_factor = rospy.get_param("~slow_down_factor", 0.0) # Slow down factor when stopping
+    goal_z = rospy.get_param("~pursuer_goal_z", 0.86) # The goal distance (in meters) to keep between the robot and the person
+    z_threshold = rospy.get_param("~pursuer_z_threshold", 0.02) # How far away from the goal distance (in meters) before the robot reacts
+
+    x_threshold = rospy.get_param("~pursuer_x_threshold", 4) # How far away in degrees from being centered (x displacement) on the person before the robot reacts
+    slice_delta = int(math.ceil((640.0 / 59.767276634) * x_threshold)) # Calculate how far values in laserscan data array has to be from center of the array for the pursuer to react
+
+    field_of_view = rospy.get_param("~pursuer_field_of_view", 41) # How wide in degrees should the pursuer's vision be to look for evader (0 <= pursuer_field_of_view <= 58)
+    field_of_view = max(0, min(field_of_view, 58)) # normalizing FOV
+    slice_length = int(math.ceil((640.0 / 59.767276634) * field_of_view)) # Calculate how many values of laserscan data fall in pursuer's field of vision
+
+    max_angular_speed = rospy.get_param("~pursuer_max_angular_speed", 0.8) # The maximum rotation speed in radians per second
+    min_angular_speed = rospy.get_param("~pursuer_min_angular_speed", 0.0) # The minimum rotation speed in radians per second
+    max_linear_speed = rospy.get_param("~pursuer_max_linear_speed", 0.6) # The max linear speed in meters per second
+    min_linear_speed = rospy.get_param("~pursuer_min_linear_speed", 0.0) # The minimum linear speed in meters per second
+    ramped_rate = rospy.get_param("~pursuer_ramped_rate", 0.3) # Rate for ramped velocity change
 
     move_cmd = Twist() # Initialize the movement command
 

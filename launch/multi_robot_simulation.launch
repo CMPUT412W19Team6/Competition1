@@ -8,16 +8,16 @@
         <arg name="y" value="-5"/>
         <arg name="z" value="0.1"/>
     </include>
-    <!-- <node name="rviz" pkg="rviz" type="rviz" args="-d $(find comp1)/simulation/world.rviz"/> -->
 
+    <node pkg="comp1" name="comp1" type="comp1.py" ns="$(arg ns2)" output="screen">
+        <param name="robot_name" value="$(arg ns2)"/>
+        <param name="start_mode" value="pursue"/>
+    </node>
+    
     <node pkg="comp1" name="evader" type="evader.py" ns="$(arg ns1)" output="screen">
         <param name="robot_name" value="$(arg ns1)"/>
+        <param name="start_mode" value="evade"/>
     </node>
 
-    <node pkg="comp1" name="pursuer" type="pursuer.py" ns="$(arg ns2)" output="screen">
-        <param name="robot_name" value="$(arg ns2)"/>
-    </node>
-
-    <node pkg="joy" type="joy_node" name="joy_node"/>
     <node pkg="smach_viewer" type="smach_viewer.py" name="smach" />
 </launch>
