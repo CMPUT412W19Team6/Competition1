@@ -69,3 +69,10 @@ This library is supposed to make turtlebot wander around in two modes (pursuit a
     - to start `Persuit`: press X on the contorller
     
 ## Concepts & Code
+
+### Overview
+***insert picture of state machine here
+
+### Evade
+
+### Persuit
