@@ -78,10 +78,13 @@ This library is supposed to make turtlebot wander around in two modes (pursuit a
 ### Evade
 
   `Concept`: 
+  
     1. Move straight until the camera found anything that's within a `certain range`. 
+    
     2. Turn for `2 seconds` after and check if the anything's winth `range`.
       > if yes, go to step 2
       > if no, go to step 1
+      
     3. In case of a bump:
       3.1 move back
       3.2 turn left
