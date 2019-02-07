@@ -36,6 +36,31 @@ This library is supposed to make turtlebot wander around in two modes (pursuit a
   
 - ROS smach ([Guide here](http://wiki.ros.org/smach))
 
+- rviz ([Link here](http://wiki.ros.org/rviz))
+
 ## Execution
+
+1. clone this repo into the source directory of your catkin workspace (e.g. catkin_ws/src)
+    ```bash
+    # under catkin_ws/src folder
+    mkdir comp1
+    git clone https://github.com/CMPUT412W19Team6/Competition1.git comp1
+    ```
+  
+2. run catkin_make and source the setup.bash
+    ```bash
+    cd ..
+    catkin_make
+    source ./devel/setup.bash
+    ```
+    
+3. connect your your kobuki base, Asus Xtion Pro and controller.
+
+4. power up the kobuki base
+
+5. start the library
+    ```bash
+    roslaunch comp1 multi_robot_simulation.launch
+    ```
 
 ## Concepts & Code
