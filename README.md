@@ -73,7 +73,8 @@ This library is supposed to make turtlebot wander around in two modes (pursuit a
 ## Concepts & Code
 
 ### Overview
-***insert picture of state machine here***
+  - state machine:
+  ![statemachine](https://github.com/CMPUT412W19Team6/Competition1/blob/master/statemachine.png?s=200)
 
 ### Evade
 
@@ -90,6 +91,7 @@ This library is supposed to make turtlebot wander around in two modes (pursuit a
       3.1 move back 0.15 meter
       3.2 turn left
       3.3 move 0.4 meter
-      3.4 go to step 1
-      
+      3.4 
+        > if no more bump, turn back and go to step 1
+        > if another bump, go to step 3.1
 ### Persuit
