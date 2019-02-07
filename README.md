@@ -1,10 +1,8 @@
 # Pursuit and Evasion
 
----
 ## Purpose
 This library is supposed to make turtlebot wander around in two modes (pursuit and evation) without bumping into anything, by using the LaserScan message obtained from Asus Xtion Pro.
 
----
 ## Pre-requisites
 
 ### Hardware requirement
@@ -37,8 +35,7 @@ This library is supposed to make turtlebot wander around in two modes (pursuit a
   ```
   
 - ROS smach ([Guide here](http://wiki.ros.org/smach))
----
+
 ## Execution
 
----
 ## Concepts & Code
