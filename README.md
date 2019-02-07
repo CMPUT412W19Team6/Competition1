@@ -63,4 +63,9 @@ This library is supposed to make turtlebot wander around in two modes (pursuit a
     roslaunch comp1 multi_robot_simulation.launch
     ```
 
+6. Start the turtlebot
+    > note:  you have to press B to stop the robot when `switching betwwen different modes`
+    - to start `Evade`  : press A on the controller
+    - to start `Persuit`: press X on the contorller
+    
 ## Concepts & Code
