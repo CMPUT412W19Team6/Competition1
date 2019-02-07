@@ -40,25 +40,25 @@ This library is supposed to make turtlebot wander around in two modes (pursuit a
 
 ## Execution
 
-1. clone this repo into the source directory of your catkin workspace (e.g. catkin_ws/src)
+1. Clone this repo into the source directory of your catkin workspace (e.g. catkin_ws/src)
     ```bash
     # under catkin_ws/src folder
     mkdir comp1
     git clone https://github.com/CMPUT412W19Team6/Competition1.git comp1
     ```
   
-2. run catkin_make and source the setup.bash
+2. Run catkin_make and source the setup.bash
     ```bash
     cd ..
     catkin_make
     source ./devel/setup.bash
     ```
     
-3. connect your your kobuki base, Asus Xtion Pro and controller.
+3. Connect your your kobuki base, Asus Xtion Pro and controller.
 
-4. power up the kobuki base
+4. Power up the kobuki base
 
-5. start the library
+5. Start the library
     ```bash
     roslaunch comp1 multi_robot_simulation.launch
     ```
@@ -67,6 +67,8 @@ This library is supposed to make turtlebot wander around in two modes (pursuit a
     > note:  you have to press B to stop the robot when `switching betwwen different modes`
     - to start `Evade`  : press A on the controller
     - to start `Persuit`: press X on the contorller
+    
+7. To stop the turtlebot, press B on the controller
     
 ## Concepts & Code
 
