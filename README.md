@@ -73,7 +73,7 @@ This repository contains code for both pursuing and evading. Pursuing is done by
     
 7. To stop the turtlebot, press B on the controller
 
-### 3.1 Parameters
+### 3.2 Parameters
 
 **~start_mode (string, default: "none")**
 
