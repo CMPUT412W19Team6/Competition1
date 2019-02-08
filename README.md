@@ -145,3 +145,15 @@ Rate for ramped velocity change
         self.g_range_ahead = min(validList)
      ```
 ### Persuit
+
+  *Concept*: 
+  
+    1. Read LaserScan data and discard any data outside field of view.
+    
+    2. Find the nearest point inside field of view.
+    
+    3. Calculate the angular and linear distance of the nearest point from the center.
+    
+    4. Adjust robot's velocity:
+      4.1 If target is too far away, increase robot's linear velocity. Else, decrease linear speed.
+      4.2 If target is not at center, change robot's angular velocity to turn towards target.
