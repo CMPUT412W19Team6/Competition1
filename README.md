@@ -75,9 +75,9 @@ This repository contains code for both pursuing and evading. Pursuing is done by
 
 Optional: A simulation with two different turtlebots - one pursuer and one evader - can be started by starting the ```multi_robot_simulation.launch``` file with:
 
-    ```
+    
     roslaunch comp1 multi_robot_simulation.launch
-    ```
+    
 
 ### 3.2 Parameters
 
