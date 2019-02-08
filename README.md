@@ -117,7 +117,7 @@ Rate for ramped velocity change
 
 ### Evade
 
-  `Concept`: 
+  *Concept*: 
   
     1. Move straight until the camera found anything that's within a 1.1 meters.
     
@@ -133,4 +133,15 @@ Rate for ramped velocity change
       3.4 
         > if no more bump, turn back and go to step 1
         > if another bump, go to step 3.1
+        
+   *Some code explanation*:
+    
+   - How we calculated the minimum range from the laserScan message: minimum non-NAN number in the ranges list
+     ```python
+      def scan_callback(self, msg):
+        validList = [x for x in msg.ranges if not math.isnan(x)]
+        validList.append(float('Inf'))
+        # g range ahead will be the minimal range
+        self.g_range_ahead = min(validList)
+     ```
 ### Persuit
