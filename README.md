@@ -73,7 +73,7 @@ This repository contains code for both pursuing and evading. Pursuing is done by
     
 7. To stop the turtlebot, press B on the controller
 
-Optional: A simulation with two different turtlebots - one pursuer and one evader - can be started by starting the ```multi_robot_simulation.launch``` file with:
+Optional: A simulation with two different turtlebots - one pursuer and one evader - can be started by starting the ```multi_robot_simulation.launch``` file (credit: [Sean Scheideman](https://github.com/scheideman/Multiple_turtlebots)) with:
 
     
     roslaunch comp1 multi_robot_simulation.launch
