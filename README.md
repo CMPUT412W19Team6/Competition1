@@ -63,7 +63,7 @@ This repository contains code for both pursuing and evading. Pursuing is done by
 
 5. Start the library
     ```bash
-    roslaunch comp1 multi_robot_simulation.launch
+    roslaunch comp1 comp1.launch
     ```
 
 6. Start the turtlebot
@@ -72,6 +72,12 @@ This repository contains code for both pursuing and evading. Pursuing is done by
     - to start `Persuit`: press X on the contorller
     
 7. To stop the turtlebot, press B on the controller
+
+Optional: A simulation with two different turtlebots - one pursuer and one evader - can be started by starting the ```multi_robot_simulation.launch``` file with:
+
+    ```
+    roslaunch comp1 multi_robot_simulation.launch
+    ```
 
 ### 3.2 Parameters
 
